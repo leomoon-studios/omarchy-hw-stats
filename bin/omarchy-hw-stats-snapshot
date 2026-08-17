@@ -1,0 +1,150 @@
+#!/usr/bin/env python3
+"""Emit one read-only hardware statistics snapshot as JSON."""
+
+from __future__ import annotations
+
+import argparse
+import glob
+import json
+import os
+import shutil
+import subprocess
+import time
+from pathlib import Path
+
+
+def cpu_counters() -> tuple[int, int]:
+    fields = Path("/proc/stat").read_text().splitlines()[0].split()
+    values = [int(value) for value in fields[1:]]
+    total = sum(values)
+    idle = values[3] + (values[4] if len(values) > 4 else 0)
+    return total, idle
+
+
+def memory_percent() -> float:
+    values: dict[str, int] = {}
+    for line in Path("/proc/meminfo").read_text().splitlines():
+        key, _, raw = line.partition(":")
+        if key in {"MemTotal", "MemAvailable"}:
+            values[key] = int(raw.strip().split()[0])
+    total = values.get("MemTotal", 0)
+    available = values.get("MemAvailable", 0)
+    if total <= 0:
+        return 0.0
+    return max(0.0, min(100.0, (total - available) * 100.0 / total))
+
+
+def default_route_interface() -> str:
+    try:
+        lines = Path("/proc/net/route").read_text().splitlines()[1:]
+    except OSError:
+        return ""
+    for line in lines:
+        fields = line.split()
+        if len(fields) >= 4 and fields[1] == "00000000":
+            try:
+                flags = int(fields[3], 16)
+            except ValueError:
+                continue
+            if flags & 0x1:
+                return fields[0]
+    return ""
+
+
+def fallback_interface() -> str:
+    for path in sorted(glob.glob("/sys/class/net/*")):
+        interface = os.path.basename(path)
+        if interface == "lo":
+            continue
+        try:
+            if Path(path, "operstate").read_text().strip() == "up":
+                return interface
+        except OSError:
+            continue
+    return ""
+
+
+def network_counters(requested: str) -> tuple[str, int, int]:
+    interface = requested if requested != "auto" else default_route_interface()
+    if not interface:
+        interface = fallback_interface()
+    if not interface or "/" in interface or interface in {".", ".."}:
+        return "", 0, 0
+    stats = Path("/sys/class/net", interface, "statistics")
+    try:
+        rx = int(stats.joinpath("rx_bytes").read_text().strip())
+        tx = int(stats.joinpath("tx_bytes").read_text().strip())
+    except (OSError, ValueError):
+        return interface, 0, 0
+    return interface, rx, tx
+
+
+def nvidia_percent() -> list[float]:
+    if not shutil.which("nvidia-smi"):
+        return []
+    try:
+        result = subprocess.run(
+            [
+                "nvidia-smi",
+                "--query-gpu=utilization.gpu",
+                "--format=csv,noheader,nounits",
+            ],
+            check=True,
+            capture_output=True,
+            text=True,
+            timeout=1.5,
+        )
+    except (OSError, subprocess.SubprocessError):
+        return []
+    values = []
+    for line in result.stdout.splitlines():
+        try:
+            values.append(float(line.strip()))
+        except ValueError:
+            continue
+    return values
+
+
+def sysfs_gpu_percent() -> list[float]:
+    values = []
+    for path in glob.glob("/sys/class/drm/card*/device/gpu_busy_percent"):
+        try:
+            values.append(float(Path(path).read_text().strip()))
+        except (OSError, ValueError):
+            continue
+    return values
+
+
+def gpu_percent() -> float | None:
+    values = nvidia_percent() + sysfs_gpu_percent()
+    if not values:
+        return None
+    return max(0.0, min(100.0, max(values)))
+
+
+def main() -> None:
+    parser = argparse.ArgumentParser()
+    parser.add_argument("--interface", default="auto")
+    args = parser.parse_args()
+
+    total, idle = cpu_counters()
+    interface, rx, tx = network_counters(args.interface)
+    print(
+        json.dumps(
+            {
+                "timestampNs": time.monotonic_ns(),
+                "cpuTotal": total,
+                "cpuIdle": idle,
+                "ramPercent": memory_percent(),
+                "gpuPercent": gpu_percent(),
+                "interface": interface,
+                "rxBytes": rx,
+                "txBytes": tx,
+            },
+            separators=(",", ":"),
+        )
+    )
+
+
+if __name__ == "__main__":
+    main()
