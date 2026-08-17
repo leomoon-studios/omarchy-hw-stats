@@ -11,6 +11,7 @@ BarWidget {
   readonly property int configuredInterval: Math.max(1, Math.min(60,
     parseInt(String(setting("refreshIntervalSec", 2)), 10) || 2))
   readonly property string configuredInterface: String(setting("networkInterface", "auto") || "auto")
+  readonly property real horizontalPadding: Style.spaceReal(8.75)
 
   function formatRate(value) {
     var bytes = Math.max(0, Number(value || 0))
@@ -40,7 +41,8 @@ BarWidget {
   onConfiguredInterfaceChanged: configureService()
   Component.onCompleted: configureService()
 
-  implicitWidth: metrics.implicitWidth
+  // Match the horizontal breathing room used by Omarchy's text widgets.
+  implicitWidth: metrics.implicitWidth + horizontalPadding * 2
   implicitHeight: barSize
 
   Row {
