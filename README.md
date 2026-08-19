@@ -17,6 +17,12 @@ omarchy plugin add https://github.com/leomoon-studios/omarchy-hw-stats --enable 
 omarchy bar move leomoon-studios.omarchy-hw-stats --section center --after omarchy.weather
 ```
 
+## Remove
+
+```bash
+omarchy plugin remove leomoon-studios.omarchy-hw-stats --yes
+```
+
 The plugin reads local counters from `/proc` and `/sys`. NVIDIA utilization is
 queried through `nvidia-smi` when available. It does not require root access or
 run a separate background daemon.
