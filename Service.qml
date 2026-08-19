@@ -84,13 +84,13 @@ Item {
 
     onExited: function(exitCode) {
       if (exitCode !== 0) {
-        console.warn("io.github.leomoon-studios.hw-stats: snapshot failed:", String(snapshotError.text || "").trim())
+        console.warn("leomoon-studios.omarchy-hw-stats: snapshot failed:", String(snapshotError.text || "").trim())
         return
       }
       try {
         root.applySnapshot(JSON.parse(snapshotOutput.text))
       } catch (error) {
-        console.warn("io.github.leomoon-studios.hw-stats: invalid snapshot:", String(error))
+        console.warn("leomoon-studios.omarchy-hw-stats: invalid snapshot:", String(error))
       }
     }
   }

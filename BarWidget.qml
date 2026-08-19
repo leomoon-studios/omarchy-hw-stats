@@ -5,9 +5,9 @@ import qs.Ui
 
 BarWidget {
   id: root
-  moduleName: "io.github.leomoon-studios.hw-stats"
+  moduleName: "leomoon-studios.omarchy-hw-stats"
 
-  readonly property var stats: bar?.shell?.serviceFor("io.github.leomoon-studios.hw-stats")
+  readonly property var stats: bar?.shell?.serviceFor("leomoon-studios.omarchy-hw-stats")
   readonly property int configuredInterval: Math.max(1, Math.min(60,
     parseInt(String(setting("refreshIntervalSec", 2)), 10) || 2))
   readonly property string configuredInterface: String(setting("networkInterface", "auto") || "auto")
